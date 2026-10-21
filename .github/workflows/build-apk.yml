@@ -1,1 +1,69 @@
 
+
+name: Gerar APK Android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "index.html"
+      - "manifest*"
+      - "sw.js"
+      - ".github/workflows/build-apk.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar arquivos do projeto
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar ferramentas Android
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+      - name: Instalar Cordova
+        run: npm install -g cordova
+
+      - name: Criar aplicativo Android
+        run: |
+          cordova create "$RUNNER_TEMP/app" \
+            com.bleckzzin.meuapp "Meu App"
+
+          rsync -av \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='README.md' \
+            --exclude='LICENSE' \
+            ./ "$RUNNER_TEMP/app/www/"
+
+      - name: Preparar plataforma Android
+        run: |
+          cd "$RUNNER_TEMP/app"
+          cordova platform add android@13
+
+      - name: Compilar APK
+        run: |
+          cd "$RUNNER_TEMP/app"
+          cordova build android --debug
+
+      - name: Disponibilizar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Meu-App-APK
+          path: ${{ runner.temp }}/app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          
